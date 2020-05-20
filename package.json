@@ -1,0 +1,23 @@
+{
+  "name": "regexdescription",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CutyCupy/RegexDescription.git"
+  },
+  "author": "Alexander Ciupka",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/CutyCupy/RegexDescription/issues"
+  },
+  "homepage": "https://github.com/CutyCupy/RegexDescription#readme",
+  "dependencies": {
+    "typescript": "^3.9.3"
+  }
+}
