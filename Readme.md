@@ -1,0 +1,1 @@
+This Programm will describe a Regex for you, so everyone can understand what kind of input you expect!
