@@ -11,7 +11,7 @@ type DescriptionRegex struct {
 }
 
 func main() {
-	r, _ := MakeRegex("[a-zA-Z]|AL|EX")
+	r, _ := MakeRegex("[A-Z]|ALE|[0-9]")
 
 	fmt.Println(r.GetDescription())
 }
@@ -36,29 +36,24 @@ func (r *DescriptionRegex) GetDescription() string {
 	end := len(program.Inst) - 1
 
 	visited := make([]bool, len(program.Inst))
-	result := analyzeInstructions(program.Inst, idx, end, &visited)
-	desc := strings.Join(result, " - ")
+	desc := analyzeInstructions(program.Inst, idx, end, &visited)
 
 	return desc
 }
 
-func analyzeInstructions(instruction []syntax.Inst, origin int, end int, visited *[]bool) []string {
-	if (*visited)[origin] {
-		return []string{""}
+func analyzeInstructions(instruction []syntax.Inst, idx int, end int, visited *[]bool) string {
+	if (*visited)[idx] {
+		return ""
 	}
-	result := make([]string, 1)
+	result := []string{""}
 	newGroup := false
-	idx := origin
-	start := true
-	for idx != len(instruction) && idx != end {
+	for idx != end {
 		instr := instruction[idx]
 
-		if !start && (idx == origin || (*visited)[idx]) {
-			idx++
-			continue
+		if (*visited)[idx] {
+			break
 		}
 		(*visited)[idx] = true
-		start = false
 
 		if newGroup {
 			newGroup = false
@@ -69,7 +64,9 @@ func analyzeInstructions(instruction []syntax.Inst, origin int, end int, visited
 
 		switch instr.Op {
 		case syntax.InstAlt:
-			result[resultIdx] += strings.Join(analyzeInstructions(instruction, int(instr.Out), end, visited), " ODER ")
+			result[resultIdx] += analyzeInstructions(instruction, int(instr.Out), end, visited) + " ODER "
+			idx = int(instr.Arg)
+			continue
 		case syntax.InstAltMatch:
 		case syntax.InstCapture:
 		case syntax.InstEmptyWidth:
@@ -98,18 +95,9 @@ func analyzeInstructions(instruction []syntax.Inst, origin int, end int, visited
 
 		nextIdx := int(instr.Out)
 
-		if nextIdx == end {
-			idx++
-			newGroup = true
-			continue
-		}
-
 		idx = nextIdx
 	}
-	for i, r := range result {
-		result[i] = fmt.Sprintf("(%s)", r)
-	}
-	return result
+	return strings.Join(result, "")
 }
 
 func findArguments(instructions []syntax.Inst, origin int, end int) []string {
