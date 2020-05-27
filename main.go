@@ -35,22 +35,41 @@ func (r *DescriptionRegex) GetDescription() string {
 
 	end := len(program.Inst) - 1
 
-	result := analyzeInstructions(program.Inst, idx, end)
+	visited := make([]bool, len(program.Inst))
+	result := analyzeInstructions(program.Inst, idx, end, &visited)
 	desc := strings.Join(result, " - ")
 
 	return desc
 }
 
-func analyzeInstructions(instruction []syntax.Inst, idx int, end int) []string {
+func analyzeInstructions(instruction []syntax.Inst, origin int, end int, visited *[]bool) []string {
+	if (*visited)[origin] {
+		return []string{""}
+	}
 	result := make([]string, 1)
 	newGroup := false
+	idx := origin
+	start := true
 	for idx != len(instruction) && idx != end {
 		instr := instruction[idx]
 
+		if !start && (idx == origin || (*visited)[idx]) {
+			idx++
+			continue
+		}
+		(*visited)[idx] = true
+		start = false
+
+		if newGroup {
+			newGroup = false
+			result = append(result, "")
+		}
+
+		resultIdx := len(result) - 1
+
 		switch instr.Op {
 		case syntax.InstAlt:
-			result := analyzeInstructions(instruction[:idx], int(instr.Out), end)
-			return []string{strings.Join(result, " ODER ")}
+			result[resultIdx] += strings.Join(analyzeInstructions(instruction, int(instr.Out), end, visited), " ODER ")
 		case syntax.InstAltMatch:
 		case syntax.InstCapture:
 		case syntax.InstEmptyWidth:
@@ -58,9 +77,19 @@ func analyzeInstructions(instruction []syntax.Inst, idx int, end int) []string {
 		case syntax.InstFail:
 		case syntax.InstNop:
 		case syntax.InstRune:
-
+			runeResult := make([]string, len(instr.Rune)/2)
+			for i, curRune := range instr.Rune {
+				if i%2 != 0 {
+					continue
+				}
+				runeResult[i/2] = string(curRune)
+				if i+1 < len(instr.Rune) && curRune != instr.Rune[i+1] {
+					runeResult[i/2] += fmt.Sprintf(" BIS %s", string(instr.Rune[i+1]))
+				}
+			}
+			result[resultIdx] += strings.Join(runeResult, " ODER ")
 		case syntax.InstRune1:
-			result = append(result, string(instr.Rune[0]))
+			result[len(result)-1] += string(instr.Rune[0])
 		case syntax.InstRuneAny:
 		case syntax.InstRuneAnyNotNL:
 		}
@@ -71,12 +100,16 @@ func analyzeInstructions(instruction []syntax.Inst, idx int, end int) []string {
 
 		if nextIdx == end {
 			idx++
+			newGroup = true
 			continue
 		}
 
 		idx = nextIdx
 	}
-
+	for i, r := range result {
+		result[i] = fmt.Sprintf("(%s)", r)
+	}
+	return result
 }
 
 func findArguments(instructions []syntax.Inst, origin int, end int) []string {
