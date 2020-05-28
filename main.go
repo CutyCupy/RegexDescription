@@ -7,7 +7,12 @@ import (
 )
 
 type DescriptionRegex struct {
-	Regex *syntax.Regexp
+	Regex  *syntax.Regexp
+	Config DescriptionRegexConfig
+}
+
+type DescriptionRegexConfig struct {
+	//TODO Fill with different configurations
 }
 
 func main() {
@@ -26,10 +31,10 @@ func MakeRegex(regex string) (*DescriptionRegex, error) {
 }
 
 func (r *DescriptionRegex) GetDescription() string {
-	return analyzeRegex(r.Regex)
+	return analyzeRegex(r.Regex, r.Config)
 }
 
-func analyzeRegex(reg *syntax.Regexp) string {
+func analyzeRegex(reg *syntax.Regexp, config DescriptionRegexConfig) string {
 	switch reg.Op {
 	case syntax.OpEmptyMatch: // matches empty string
 	case syntax.OpCharClass: // matches Runes interpreted as range pair list
@@ -55,28 +60,28 @@ func analyzeRegex(reg *syntax.Regexp) string {
 	case syntax.OpCapture: // capturing subexpression
 		capture := make([]string, len(reg.Sub))
 		for idx, sub := range reg.Sub {
-			capture[idx] = analyzeRegex(sub)
+			capture[idx] = analyzeRegex(sub, config)
 		}
 		return strings.Join(capture, " ODER ")
 	case syntax.OpStar: // matches Sub[0] any amount of times
-		return getRepeatDescription(0, -1, analyzeRegex(reg.Sub[0]))
+		return getRepeatDescription(0, -1, analyzeRegex(reg.Sub[0], config))
 	case syntax.OpPlus: // matches at least one Sub[0]
-		return getRepeatDescription(1, -1, analyzeRegex(reg.Sub[0]))
+		return getRepeatDescription(1, -1, analyzeRegex(reg.Sub[0], config))
 	case syntax.OpQuest: // matches 0 or 1 time Sub[0]
-		return getRepeatDescription(0, 1, analyzeRegex(reg.Sub[0]))
+		return getRepeatDescription(0, 1, analyzeRegex(reg.Sub[0], config))
 	case syntax.OpRepeat: // matches Sub[0] between Min and Max times. When Max == -1 then Max should be infinite.
-		return getRepeatDescription(reg.Min, reg.Max, analyzeRegex(reg.Sub[0]))
+		return getRepeatDescription(reg.Min, reg.Max, analyzeRegex(reg.Sub[0], config))
 	case syntax.OpConcat: // matches concatenation of Subs
 		concat := make([]string, len(reg.Sub))
 		for idx, sub := range reg.Sub {
-			concat[idx] = analyzeRegex(sub)
+			concat[idx] = analyzeRegex(sub, config)
 		}
-		return strings.Join(concat, " + ")
+		return strings.Join(concat, " und ")
 	case syntax.OpAlternate: // matches alternation of Subs
 		alternate := make([]string, len(reg.Sub))
 
 		for idx, sub := range reg.Sub {
-			alternate[idx] = analyzeRegex(sub)
+			alternate[idx] = analyzeRegex(sub, config)
 		}
 		return strings.Join(alternate, " ODER ")
 	}
