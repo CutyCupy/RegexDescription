@@ -11,7 +11,7 @@ type DescriptionRegex struct {
 }
 
 func main() {
-	r, _ := MakeRegex("[A-Z]|ALE|[0-9]")
+	r, _ := MakeRegex("DTB_[0-9]{3}_[A-Z]{3}")
 
 	fmt.Println(r.GetDescription())
 }
@@ -26,78 +26,83 @@ func MakeRegex(regex string) (*DescriptionRegex, error) {
 }
 
 func (r *DescriptionRegex) GetDescription() string {
-	program, err := syntax.Compile(r.Regex)
-	if err != nil {
-		return "Fehlerhafter Regex"
-	}
-
-	idx := program.Start
-
-	end := len(program.Inst) - 1
-
-	visited := make([]bool, len(program.Inst))
-	desc := analyzeInstructions(program.Inst, idx, end, &visited)
-
-	return desc
+	return analyzeRegex(r.Regex)
 }
 
-func analyzeInstructions(instruction []syntax.Inst, idx int, end int, visited *[]bool) string {
-	if (*visited)[idx] {
-		return ""
+func analyzeRegex(reg *syntax.Regexp) string {
+	switch reg.Op {
+	case syntax.OpEmptyMatch: // matches empty string
+	case syntax.OpCharClass: // matches Runes interpreted as range pair list
+		return getRuneDescription(reg.Rune, 2, " ODER ")
+	case syntax.OpLiteral: // matches Runes sequence
+		return getRuneDescription(reg.Rune, 1, "")
+	case syntax.OpAnyCharNotNL: // matches any character except newline
+		return "Beliebiges Zeichen ohne \\n"
+	case syntax.OpAnyChar: // matches any character
+		return "Beliebiges Zeichen"
+	case syntax.OpBeginLine: // matches empty string at beginning of line
+		return "Zeilenbeginn"
+	case syntax.OpEndLine: // matches empty string at end of line
+		return "Zeilenende"
+	case syntax.OpBeginText: // matches empty string at beginning of text
+		return "Textanfang"
+	case syntax.OpEndText: // matches empty string at end of text
+		return "Textende"
+	case syntax.OpWordBoundary: // matches word boundary `\b`
+		return "Wortanfang oder -ende"
+	case syntax.OpNoWordBoundary: // matches word non-boundary `\B`
+		return "Kein Wortanfang oder -ende"
+	case syntax.OpCapture: // capturing subexpression
+		capture := make([]string, len(reg.Sub))
+		for idx, sub := range reg.Sub {
+			capture[idx] = analyzeRegex(sub)
+		}
+		return strings.Join(capture, " ODER ")
+	case syntax.OpStar: // matches Sub[0] any amount of times
+		return getRepeatDescription(0, -1, analyzeRegex(reg.Sub[0]))
+	case syntax.OpPlus: // matches at least one Sub[0]
+		return getRepeatDescription(1, -1, analyzeRegex(reg.Sub[0]))
+	case syntax.OpQuest: // matches 0 or 1 time Sub[0]
+		return getRepeatDescription(0, 1, analyzeRegex(reg.Sub[0]))
+	case syntax.OpRepeat: // matches Sub[0] between Min and Max times. When Max == -1 then Max should be infinite.
+		return getRepeatDescription(reg.Min, reg.Max, analyzeRegex(reg.Sub[0]))
+	case syntax.OpConcat: // matches concatenation of Subs
+		concat := make([]string, len(reg.Sub))
+		for idx, sub := range reg.Sub {
+			concat[idx] = analyzeRegex(sub)
+		}
+		return strings.Join(concat, " + ")
+	case syntax.OpAlternate: // matches alternation of Subs
+		alternate := make([]string, len(reg.Sub))
+
+		for idx, sub := range reg.Sub {
+			alternate[idx] = analyzeRegex(sub)
+		}
+		return strings.Join(alternate, " ODER ")
 	}
-	result := []string{""}
-	newGroup := false
-	for idx != end {
-		instr := instruction[idx]
+	return ""
+}
 
-		if (*visited)[idx] {
-			break
-		}
-		(*visited)[idx] = true
-
-		if newGroup {
-			newGroup = false
-			result = append(result, "")
-		}
-
-		resultIdx := len(result) - 1
-
-		switch instr.Op {
-		case syntax.InstAlt:
-			result[resultIdx] += analyzeInstructions(instruction, int(instr.Out), end, visited) + " ODER "
-			idx = int(instr.Arg)
-			continue
-		case syntax.InstAltMatch:
-		case syntax.InstCapture:
-		case syntax.InstEmptyWidth:
-		case syntax.InstMatch:
-		case syntax.InstFail:
-		case syntax.InstNop:
-		case syntax.InstRune:
-			runeResult := make([]string, len(instr.Rune)/2)
-			for i, curRune := range instr.Rune {
-				if i%2 != 0 {
-					continue
-				}
-				runeResult[i/2] = string(curRune)
-				if i+1 < len(instr.Rune) && curRune != instr.Rune[i+1] {
-					runeResult[i/2] += fmt.Sprintf(" BIS %s", string(instr.Rune[i+1]))
-				}
-			}
-			result[resultIdx] += strings.Join(runeResult, " ODER ")
-		case syntax.InstRune1:
-			result[len(result)-1] += string(instr.Rune[0])
-		case syntax.InstRuneAny:
-		case syntax.InstRuneAnyNotNL:
-		}
-
-		// result = append(result, instr.Op.String())
-
-		nextIdx := int(instr.Out)
-
-		idx = nextIdx
+func getRepeatDescription(min int, max int, char string) string {
+	switch {
+	case min == max:
+		return fmt.Sprintf("%d-mal %s", min, char)
+	case max == -1:
+		return fmt.Sprintf("mindestens %d-mal %s", min, char)
+	default:
+		return fmt.Sprintf("zwischen %d und %d-mal %s", min, max, char)
 	}
-	return strings.Join(result, "")
+}
+
+func getRuneDescription(runes []rune, groupSize int, join string) string {
+	runeResult := make([]string, len(runes)/groupSize)
+	for i, curRune := range runes {
+		if i%groupSize != 0 {
+			runeResult[i/groupSize] += " BIS "
+		}
+		runeResult[i/groupSize] += string(curRune)
+	}
+	return strings.Join(runeResult, join)
 }
 
 func findArguments(instructions []syntax.Inst, origin int, end int) []string {
